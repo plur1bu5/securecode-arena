@@ -94,6 +94,10 @@ const toc = [
       </ul>
 
       <h2 id="method">3. Method</h2>
+      <figure>
+        <img src={withBase("/figures/method.png")} alt="Study overview: 16 prompts fed to 9 models (SLMs and LLMs) produce generated code, which is statically analysed by Bandit, Gosec, and Semgrep to yield vulnerability metrics." />
+        <figcaption>Figure. Study method overview — prompts, models, generated code, static analysis, and results.</figcaption>
+      </figure>
       <h3>3.1 Models</h3>
       <p>
         Nine models. Three local SLMs run via Ollama on CPU: Qwen2.5-Coder 1.5B, Qwen2.5-Coder 7B, and
@@ -125,6 +129,10 @@ const toc = [
         are what appear in the appendix of the full dataset.
       </p>
       <h3>3.3 The pipeline</h3>
+      <figure>
+        <img src={withBase("/figures/pipeline.png")} alt="Analysis pipeline: generated code passes a functional gate (parse/compile), then Bandit, Gosec, and Semgrep static analysis, then CWE+line deduplication to highest severity, producing three measurement levels: all findings, targeted CWEs, and targeted HIGH/MEDIUM." />
+        <figcaption>Figure. The four-stage analysis pipeline — functional gate, static analysis, deduplication, and measurement levels.</figcaption>
+      </figure>
       <ol>
         <li>
           <strong>Functional gate.</strong> Every file must parse or compile (<code>ast.parse</code>, <code>gofmt -e</code>, <code>node --check</code>).
