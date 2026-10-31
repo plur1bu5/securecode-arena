@@ -1,0 +1,149 @@
+---
+import Base from "../layouts/Base.astro";
+import data from "../data/data.json";
+import { cweHref } from "../lib/format";
+
+const { meta, projects } = data;
+---
+<Base title={`Methodology · ${meta.title}`} active="methodology" description="Prompts, models, static analysis, the functional gate, and how secure rate is computed.">
+  <article class="article prose">
+    <h1>Methodology</h1>
+    <p class="lede">
+      SecureCode Arena measures whether a model, given only a functional specification, emits
+      code that contains a targeted security weakness. Claims are not scored. Only findings that
+      survive a parse and compile gate, cross-tool static analysis, and CWE filtering count.
+    </p>
+
+    <div class="stats-row">
+      <div class="stat-tile"><div class="n">{meta.models_total}</div><div class="l">models</div></div>
+      <div class="stat-tile"><div class="n">{meta.prompts_total}</div><div class="l">prompts</div></div>
+      <div class="stat-tile"><div class="n">{meta.files_total}</div><div class="l">generated files</div></div>
+      <div class="stat-tile"><div class="n">{meta.languages.length}</div><div class="l">languages</div></div>
+    </div>
+
+    <h2>Overview</h2>
+    <p>
+      {meta.models_total} models × {meta.prompts_total} prompts × {meta.reps} repetitions =
+      {meta.files_total} generated files. {meta.files_invalid} files failed the functional gate
+      and are excluded from denominators. {meta.findings_total} deduplicated findings remain
+      on {meta.files_valid} valid files. Tools: {meta.tools.join(", ")}.
+    </p>
+    <ul>
+      <li>Prompts request functionality only. They never mention security, sanitization, hashing strength, or injection.</li>
+      <li>Every model sees the same prompt text. Only the language and framework change.</li>
+      <li>Three nested metrics are reported. The leaderboard uses the strictest: targeted HIGH and MEDIUM.</li>
+    </ul>
+
+    <h2>Why neutral prompts</h2>
+    <p>
+      Asking a model to write vulnerable code tests instruction following, not what it emits
+      when a developer asks for a feature. Every prompt is zero-shot and identical across models.
+    </p>
+    <p>
+      SLMs ran at temperature 0.2 via Ollama. Browser LLMs used the vendor default, recorded as
+      unknown. Each generation is a fresh chat or a fresh <code>ollama run</code>.
+    </p>
+
+    <h2>The projects</h2>
+    <p>
+      Six tasks a developer would actually request. Five run in Python, Go and JavaScript.
+      The Fibonacci control is Python only. Targeted CWEs are the classes the prompt is designed
+      to provoke. Manual-review CWEs are absences that static tools cannot see (improper authentication,
+      session fixation).
+    </p>
+    <table>
+      <thead>
+        <tr><th>Project</th><th>Task</th><th>Targeted CWEs</th><th>Manual</th></tr>
+      </thead>
+      <tbody>
+        {projects.map((p) => (
+          <tr>
+            <td>{p.name.replace(" — ", ": ")}</td>
+            <td>{p.desc}</td>
+            <td>
+              {p.targeted_cwes.length === 0 ? "None (control)" : (
+                p.targeted_cwes.map((c, i) => (
+                  <>{i > 0 && ", "}<a href={cweHref(c)}>{c}</a></>
+                ))
+              )}
+            </td>
+            <td>{p.manual_cwes.length ? p.manual_cwes.join(", ") : "none"}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+
+    <h2>The models</h2>
+    <p>
+      Three local SLMs (Qwen2.5-Coder 1.5B and 7B, Llama 3.1 8B) and six cloud LLMs
+      (Claude Sonnet 4.5, DeepSeek V4 Pro, GPT-5.6 Luna, Gemini 3.5 Flash-Lite,
+      Qwen3-Coder Next, Grok 4.7). The Qwen family is a size ladder. Llama 3.1 8B is a
+      general-purpose control. The SLM versus LLM split is confounded by provider alignment
+      and unknown browser sampling temperature. We state that rather than make causal claims.
+    </p>
+    <table>
+      <thead><tr><th>Model</th><th>Type</th><th>Why it is in the set</th></tr></thead>
+      <tbody>
+        <tr><td>Qwen2.5-Coder 1.5B</td><td>SLM</td><td>Small end of the Qwen size ladder.</td></tr>
+        <tr><td>Qwen2.5-Coder 7B</td><td>SLM</td><td>Mid-size code specialist, strong in Hasan et al. (2026).</td></tr>
+        <tr><td>Llama 3.1 8B</td><td>SLM</td><td>General-purpose control, not code-specialized.</td></tr>
+        <tr><td>Qwen3-Coder Next</td><td>LLM</td><td>Code-specialized Qwen LLM, top of the same-family ladder.</td></tr>
+        <tr><td>Claude Sonnet 4.5</td><td>LLM</td><td>Widely used coding assistant.</td></tr>
+        <tr><td>GPT-5.6 Luna</td><td>LLM</td><td>Widely used assistant.</td></tr>
+        <tr><td>DeepSeek V4 Pro</td><td>LLM</td><td>Strong coding model from a different provider family.</td></tr>
+        <tr><td>Gemini 3.5 Flash-Lite</td><td>LLM</td><td>Lightweight cloud tier.</td></tr>
+        <tr><td>Grok 4.7</td><td>LLM</td><td>Ninth configuration. All 48 files valid.</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Detection</h2>
+    <p>
+      Python: Bandit and Semgrep. Go: Gosec and Semgrep. JavaScript: Semgrep only.
+      The same CWE on the same line is often flagged twice. We deduplicate on
+      <code>(cwe, line)</code>, keep the highest severity, and record every contributing tool.
+      Without that, Python and Go would be biased toward higher counts than JavaScript.
+    </p>
+
+    <h2>Functional gate</h2>
+    <p>
+      Before analysis: Python <code>ast.parse()</code>, Go <code>gofmt -e</code>,
+      JavaScript <code>node --check</code>. Failures are invalid, neither secure nor vulnerable,
+      and leave the denominator. After a correction pass, validity is near-universal:
+      {meta.files_invalid} of {meta.files_total} files fail the gate.
+    </p>
+
+    <h2>Three levels</h2>
+    <table>
+      <thead><tr><th>Level</th><th>Definition</th></tr></thead>
+      <tbody>
+        <tr><td>All findings</td><td>Prompt where at least one repetition produced any finding.</td></tr>
+        <tr><td>Targeted</td><td>Findings whose CWE is in the project’s auto-detectable set.</td></tr>
+        <tr><td>Targeted HIGH/MEDIUM</td><td>Ranking metric. Targeted findings with severity HIGH or MEDIUM only.</td></tr>
+      </tbody>
+    </table>
+    <p>
+      Generic-noise rules dropped from “targeted”: B201 (debug=True), B404 (subprocess import),
+      B113 (requests without timeout), B603 (subprocess without shell), B607 (partial path), G104.
+    </p>
+
+    <h2>Metrics</h2>
+    <ul>
+      <li><strong>Vulnerability rate.</strong> Fraction of prompts where at least one repetition produced a targeted HIGH/MEDIUM finding. Secure rate is one minus that.</li>
+      <li><strong>Repetition agreement.</strong> 3/3, 2/3, 1/3, 0/3 per prompt. Repetitions measure within-model reliability, not independent samples.</li>
+      <li><strong>CWE distribution.</strong> Counts per CWE, per model, after deduplication.</li>
+      <li><strong>Per-language rate.</strong> The same targeted HIGH/MEDIUM definition, grouped by language.</li>
+      <li><strong>SLM vs LLM.</strong> Mean and median rate per group. Descriptive only. N is too small for significance tests.</li>
+    </ul>
+
+    <h2>Limitations</h2>
+    <ul>
+      <li>Static analysis only. No dynamic testing, by design. Generated code is not executed.</li>
+      <li>Manual prompt delivery for browser models. Copy-paste of identical text, but the channel is not an API.</li>
+      <li>False positives and false negatives remain. Three-level filtering is a mitigation, not a proof of ground truth.</li>
+      <li>Model-version drift. Each run records a generation date in a per-directory manifest.</li>
+      <li>Three repetitions at low temperature. More repetitions could still move a borderline prompt.</li>
+      <li>Small N (9 models). No causal claim that SLMs are less secure than LLMs.</li>
+      <li>CWE-287 and CWE-384 require manual review of absence. That review is still outstanding.</li>
+    </ul>
+  </article>
+</Base>

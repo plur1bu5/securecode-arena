@@ -1,0 +1,143 @@
+---
+import Base from "../layouts/Base.astro";
+import data from "../data/data.json";
+import { pct } from "../lib/format";
+import { modelMeta } from "../lib/vendors";
+import { withBase } from "../lib/paths";
+
+const { meta, models } = data;
+const slms = models.filter((m) => m.type === "SLM");
+const llms = models.filter((m) => m.type === "LLM");
+---
+<Base title={`About · ${meta.title}`} active="about" description="Why SecureCode Arena exists, what it measures, and who conducted the study.">
+  <article class="article prose">
+    <h1>A defensive benchmark for generated code</h1>
+    <p class="lede">
+      SecureCode Arena measures how often AI coding models introduce security vulnerabilities
+      when they are asked only for useful functionality. It does not measure how well a model can
+      find or exploit bugs.
+    </p>
+    <div class="cover-img-wrap">
+      <img src={withBase("/cover.png")} alt="SecureCode Arena — AI models competing to write secure code" class="cover-img" />
+    </div>
+
+    <h2>What the study measures</h2>
+    <p>
+      Each of {meta.models_total} models answered the same {meta.prompts_total} prompts three times
+      ({meta.files_total} files). After a parse and compile gate ({meta.files_valid} valid,
+      {meta.files_invalid} invalid), remaining files were scanned with {meta.tools.join(", ")}.
+      Findings were deduplicated on (CWE, line) and mapped to severity.
+    </p>
+    <p>
+      The headline number is <strong>secure rate</strong>: the share of prompts with no targeted
+      HIGH or MEDIUM finding in any repetition. Four cloud models tie at 14/16 secure
+      ({pct(0.875)}). The three local SLMs are each secure on 11/16.
+    </p>
+    <p>
+      Functional correctness is not scored. A program that compiles and still concatenates SQL
+      is a vulnerability. A program that fails to parse is invalid, not secure.
+    </p>
+
+    <h2>The gap this fills</h2>
+    <p>
+      Hasan et al. (2026) evaluated 20 SLMs (0.4B to 10B) on HumanEval, MBPP, Mercury, HumanEvalPack
+      and CodeXGLUE. They reported pass@k, VRAM, latency, and multilingual performance.
+      Section 5.1 of that paper states that those metrics do not account for the security of
+      generated code. A function can pass every unit test and still contain command injection.
+    </p>
+    <p>
+      Concurrent work on secure code generation at agent scale, including LSCBench
+      (Wu et al., 2026), likewise finds that functional success far outruns security. This study
+      is complementary: it focuses on small local models versus cloud assistants, under a
+      static-analysis protocol, with a Qwen size ladder.
+    </p>
+    <p>
+      The SLM versus LLM comparison is <em>descriptive</em>. Three local SLMs and six cloud LLMs
+      is too small for significance tests. We report means: SLM mean targeted HIGH/MEDIUM rate
+      {meta.slm_mean_vuln_rate}, LLM mean {meta.llm_mean_vuln_rate}.
+    </p>
+
+    <h2>Models tested</h2>
+    <p>
+      Three local SLMs via Ollama on CPU, and six cloud LLMs via browser chat. Temperature 0.2
+      for SLMs. Browser defaults (unknown) for LLMs. Fresh chat per generation.
+    </p>
+    <table>
+      <thead>
+        <tr><th>Model</th><th>Type</th><th>Size</th><th>Vendor</th><th>Weights</th></tr>
+      </thead>
+      <tbody>
+        {[...slms, ...llms].map((m) => {
+          const mm = modelMeta(m.id);
+          return (
+            <tr>
+              <td><a href={withBase(`/models/${m.slug}/`)}>{m.name}</a></td>
+              <td>{m.type}</td>
+              <td>{m.size ?? "n/a"}</td>
+              <td>{mm.vendor}</td>
+              <td>{mm.weights === "open" ? "Open" : "Proprietary"}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+    <p>
+      The Qwen ladder is intentional: Qwen2.5-Coder 1.5B, then 7B, then Qwen3-Coder Next (LLM).
+      Llama 3.1 8B is a general-purpose control, not a code specialist.
+    </p>
+
+    <h2>Languages and projects</h2>
+    <p>
+      Python, Go and JavaScript. Hasan et al. found SLMs stronger on Python and weaker on Go.
+      Six coding projects (authentication API, file service, database search, health monitor, session
+      handler, plus a Python-only Fibonacci control) yield 16 prompts. Details live on
+      <a href={withBase("/projects/")}>Projects</a> and <a href={withBase("/methodology/")}>Methodology</a>.
+    </p>
+
+    <h2>Authors</h2>
+    <p>
+      This benchmark is an academic research project at the National Institute of Posts and
+      Telecommunications (INPT), Rabat.
+    </p>
+    <div class="team-grid">
+      <div class="team-card" style="grid-column: 1 / -1; max-width: 320px; margin: 0 auto;">
+        <strong>Meryeme Ayache</strong>
+        <div class="role">Associate Professor · Supervisor</div>
+      </div>
+      <div class="team-card">
+        <strong>Mohamed Anaddam</strong>
+        <div class="role">Cybersecurity Engineer</div>
+      </div>
+      <div class="team-card">
+        <strong>Maryam Iblihi</strong>
+        <div class="role">Cybersecurity Engineer</div>
+      </div>
+    </div>
+
+    <h2>Citing this work</h2>
+    <p>
+      Anaddam, M., Iblihi, M., and Ayache, M. (2026). SecureCode Arena: a defensive benchmark of
+      AI-generated code security. INPT.
+    </p>
+    <pre class="cite">@misc&#123;securecodearena2026,
+  author       = &#123;Anaddam, Mohamed and Iblihi, Maryam and Ayache, Meryeme&#125;,
+  title        = &#123;&#123;SecureCode Arena&#125;: A Defensive Benchmark of &#123;AI&#125;-Generated Code Security&#125;,
+  year         = &#123;2026&#125;,
+  institution  = &#123;INPT&#125;,
+  note         = &#123;v1.0&#125;
+&#125;</pre>
+
+    <h2>Related work</h2>
+    <ul>
+      <li>
+        Hasan, M. M., et al. (2026). Evaluation of small language models on code generation.
+        Cited for the SLM correctness and efficiency gap that this study addresses.
+      </li>
+      <li>
+        Wu, T., et al. (2026).
+        <a href="https://arxiv.org/abs/2610.14766">Last Secure Code Benchmark: Is the Code You Vibe Secure?</a>
+        arXiv:2610.14766. Agent-scale secure code generation across function, file and repository tasks.
+      </li>
+    </ul>
+  </article>
+</Base>

@@ -1,0 +1,635 @@
+---
+import Base from "../layouts/Base.astro";
+import data from "../data/data.json";
+import { pct, fraction } from "../lib/format";
+import { modelMeta, vendorColor, VENDOR_COLORS, CWE_SHORT, heatBlue } from "../lib/vendors";
+import { withBase } from "../lib/paths";
+
+const { meta, models, cwe_distribution } = data;
+const top5 = models.slice(0, 5);
+const maxSev = Math.max(...models.map((m) => m.severity.HIGH + m.severity.MEDIUM + m.severity.LOW));
+const fewest = [...models].sort((a, b) => a.findings_count - b.findings_count)[0];
+const zeroHigh = models.filter((m) => m.severity.HIGH === 0);
+const vendors = [...new Set(models.map((m) => modelMeta(m.id).vendor))];
+
+const colMax: Record<string, number> = {};
+const colMin: Record<string, number> = {};
+for (const c of cwe_distribution) {
+  const vals = models.map((m) => c.per_model[m.id] ?? 0);
+  colMax[c.cwe] = Math.max(...vals);
+  colMin[c.cwe] = Math.min(...vals);
+}
+
+const payload = models.map((m) => {
+  const metaM = modelMeta(m.id);
+  return {
+    id: m.id,
+    slug: m.slug,
+    name: m.name,
+    type: m.type,
+    size: m.size,
+    family: m.family,
+    vendor: metaM.vendor,
+    weights: metaM.weights,
+    logo: withBase(metaM.logo),
+    short: metaM.short,
+    color: vendorColor(metaM.vendor),
+    secure: m.secure_prompts,
+    vulnerable: m.vulnerable_prompts,
+    total: m.total_prompts,
+    findings: m.findings_count,
+    high: m.severity.HIGH,
+    med: m.severity.MEDIUM,
+    low: m.severity.LOW,
+    valid: m.files_valid,
+    files: m.files_total,
+    rank: m.rank,
+    py: m.by_language.python.secure_rate,
+    go: m.by_language.go.secure_rate,
+    js: m.by_language.javascript.secure_rate,
+  };
+});
+---
+<Base title={`${meta.title} · Leaderboard`} active="leaderboard">
+  <div class="wrap">
+    <section class="hero">
+      <div>
+        <h1>{meta.subtitle}</h1>
+        <p class="lede">
+          SecureCode Arena measures how often language models introduce security vulnerabilities
+          when they generate code from functional specifications that contain no security guidance.
+          Nine models, three locally hosted SLMs and six cloud LLMs, each completed sixteen prompts
+          with three independent generations. Files that passed a parse and compile gate were analysed
+          with Bandit, Gosec and Semgrep. Ranking uses the share of prompts with no targeted HIGH or
+          MEDIUM finding.
+        </p>
+      </div>
+      <aside class="card top-card" aria-label="Top 5 models">
+        <div class="top-head">
+          <h2>Top 5</h2>
+          <span>secure prompts, of {meta.prompts_total}</span>
+        </div>
+        {top5.map((m) => {
+          const mm = modelMeta(m.id);
+          return (
+            <a class="top-row" href={withBase(`/models/${m.slug}/`)}>
+              <span class="rank">{m.rank}</span>
+              <img class="logo" src={withBase(mm.logo)} alt="" />
+              <span>
+                <span class="name">{m.name}</span>
+                <span class="sub">{mm.vendor} · {m.type}</span>
+              </span>
+              <span class="top-score">
+                <span class="bar-mini" aria-hidden="true"><i style={`width:${m.secure_rate * 100}%;background:${vendorColor(mm.vendor)}`}></i></span>
+                {m.secure_prompts}
+              </span>
+            </a>
+          );
+        })}
+      </aside>
+    </section>
+
+    <div class="kpi-grid">
+      <div class="kpi">
+        <p class="k">Top score</p>
+        <div class="v">14/16</div>
+        <div class="d">Four models, tied</div>
+      </div>
+      <div class="kpi">
+        <p class="k">Fewest findings</p>
+        <div class="v">{fewest.findings_count}</div>
+        <div class="d">
+          <img class="logo" src={withBase(modelMeta(fewest.id).logo)} alt="" />
+          {fewest.name}
+        </div>
+      </div>
+      <div class="kpi">
+        <p class="k">SLM vs LLM</p>
+        <div class="v">2.0×</div>
+        <div class="d">Mean vulnerable-prompt rate, 31.2% vs 15.6%</div>
+      </div>
+      <div class="kpi">
+        <p class="k">The study</p>
+        <div class="v">{meta.models_total}</div>
+        <div class="d">{meta.prompts_total} prompts · {meta.languages.length} languages · {meta.files_total} files</div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="hr" />
+
+  <div class="wrap">
+    <div class="filter-bar" id="filters">
+      <select id="f-set" aria-label="Model set">
+        <option value="all">All models</option>
+        <option value="SLM">SLMs</option>
+        <option value="LLM">LLMs</option>
+        <option value="open">Open weights</option>
+        <option value="proprietary">Proprietary</option>
+        {vendors.map((v) => <option value={`vendor:${v}`}>Vendor: {v}</option>)}
+      </select>
+      <div class="seg" role="group" aria-label="Colour">
+        <button type="button" data-color="vendor" class="on">By vendor</button>
+        <button type="button" data-color="weights">Open vs proprietary</button>
+        <button type="button" data-color="type">SLM vs LLM</button>
+      </div>
+      <input id="f-search" type="search" placeholder="Highlight a model" autocomplete="off" />
+    </div>
+  </div>
+
+  <div class="wrap">
+    <section class="section" id="score" style="padding-top:8px">
+      <div class="section-head">
+        <div>
+          <h2>Score</h2>
+          <p class="section-intro">
+            Share of the sixteen prompts that produced no targeted HIGH or MEDIUM finding in any of three repetitions.
+          </p>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-toolbar">
+          <div class="tabs" id="score-tabs">
+            <button type="button" data-metric="secure" class="on">Secure prompts</button>
+            <button type="button" data-metric="vulnerable">Vulnerable prompts</button>
+            <button type="button" data-metric="findings">Finding volume</button>
+          </div>
+          <span class="higher" id="score-hint">prompts secure, of 16 · Higher is better</span>
+        </div>
+        <div class="vendor-legend" id="legend"></div>
+        <div class="vbars" id="vbars"></div>
+        <div class="what-measures-wrap">
+        <details class="what-measures">
+          <summary>What this measures</summary>
+          <p>
+            Each bar shows one model's result on the selected metric across all 16 prompts.
+            <strong>Secure prompts</strong> counts prompts where none of three independent generations
+            produced a targeted HIGH or MEDIUM static-analysis finding — higher is better.
+            <strong>Vulnerable prompts</strong> is the inverse — lower is better.
+            <strong>Finding volume</strong> is the total number of deduplicated (CWE, line) findings
+            across all files — lower is better, but it is not the ranking metric.
+            Filters and the colour toggle above apply to all charts on this page.
+          </p>
+        </details>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <hr class="hr" />
+
+  <div class="wrap">
+    <section class="section" id="leaderboard">
+      <h2>Leaderboard</h2>
+      <p class="section-intro">
+        Every model under the same protocol: identical prompts, three repetitions, a parse and compile gate,
+        then cross-tool static analysis. The ranking metric is targeted HIGH/MEDIUM secure rate.
+      </p>
+      <div class="table-wrap">
+        <table class="lb">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Model</th>
+              <th>Type</th>
+              <th class="right">Secure</th>
+              <th class="right">Vulnerable</th>
+              <th>Severity</th>
+              <th class="right">Valid files</th>
+            </tr>
+          </thead>
+          <tbody>
+            {models.map((m) => {
+              const mm = modelMeta(m.id);
+              return (
+                <tr class="mrow" data-id={m.id} data-type={m.type} data-vendor={mm.vendor} data-weights={mm.weights} data-name={m.name}>
+                  <td class="num faint">{m.rank}</td>
+                  <td>
+                    <a class="model-link model-cell" href={withBase(`/models/${m.slug}/`)}>
+                      <img class="logo" src={withBase(mm.logo)} alt="" />
+                      <span>
+                        {m.name}
+                        <span class="sub">{mm.vendor} · {mm.weights === "open" ? "Open weights" : "Proprietary"}{m.size ? ` · ${m.size}` : ""}</span>
+                      </span>
+                    </a>
+                  </td>
+                  <td><span class={`badge ${m.type.toLowerCase()}`}>{m.type}</span></td>
+                  <td class="right num">
+                    {fraction(m.secure_prompts, m.total_prompts)}
+                    <span class="sub">{pct(m.secure_rate)}</span>
+                  </td>
+                  <td class="right num">{m.vulnerable_prompts}</td>
+                  <td class="sev">
+                    <span class="h">H {m.severity.HIGH}</span>
+                    · <span class="m">M {m.severity.MEDIUM}</span>
+                    · <span class="l">L {m.severity.LOW}</span>
+                  </td>
+                  <td class="right num">{fraction(m.files_valid, m.files_total)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <hr class="hr" />
+
+  <div class="wrap">
+    <section class="section" id="classes">
+      <h2>By vulnerability class</h2>
+      <p class="section-intro">
+        Deduplicated finding counts per CWE, per model. Darker cells indicate fewer findings in that class.
+        A contrasting outline marks the lowest count in the column.
+      </p>
+      <div class="heat-wrap">
+        <table class="heat">
+          <thead>
+            <tr>
+              <th class="model">Model</th>
+              {cwe_distribution.map((c) => (
+                <th class={c.total < 5 ? "faded" : undefined} title={`${c.cwe} ${c.name} · ${c.total} findings total`}>
+                  {CWE_SHORT[c.cwe] ?? c.cwe}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {models.map((m) => {
+              const mm = modelMeta(m.id);
+              return (
+                <tr class="mrow" data-id={m.id} data-type={m.type} data-vendor={mm.vendor} data-weights={mm.weights} data-name={m.name}>
+                  <th class="model" scope="row">
+                    <a class="model-cell" href={withBase(`/models/${m.slug}/`)}>
+                      <img class="logo" src={withBase(mm.logo)} alt="" />
+                      {mm.short}
+                    </a>
+                  </th>
+                  {cwe_distribution.map((c) => {
+                    const n = c.per_model[m.id] ?? 0;
+                    const heat = heatBlue(n, colMax[c.cwe]);
+                    const best = n === colMin[c.cwe];
+                    return (
+                      <td class={c.total < 5 ? "faded" : undefined}>
+                        <span
+                          class:list={["heat-cell", best && "best"]}
+                          style={`background:${heat.bg};color:${heat.fg}`}
+                          title={`${c.cwe} ${c.name}: ${n} of ${c.total} findings`}
+                        >
+                          {n}/{c.total}
+                        </span>
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div class="legend">
+        <span>more findings</span>
+        <span class="legend-bar" aria-hidden="true"></span>
+        <span>fewer findings</span>
+        <span>Each cell shows this model's count out of the column total. The lowest count is outlined. Faded columns have fewer than 5 findings total.</span>
+      </div>
+    </section>
+  </div>
+
+  <hr class="hr" />
+
+  <div class="wrap">
+    <section class="section" id="language">
+      <h2>By language</h2>
+      <p class="section-intro">
+        Targeted HIGH/MEDIUM secure rate, grouped by language. Python includes the Fibonacci control (6 prompts);
+        Go and JavaScript have 5.
+      </p>
+      <div class="chart-card">
+        <div class="chart-toolbar">
+          <div class="tabs" id="lang-tabs">
+            <button type="button" data-lang="python" class="on">Python</button>
+            <button type="button" data-lang="go">Go</button>
+            <button type="button" data-lang="javascript">JavaScript</button>
+          </div>
+          <span class="higher">secure rate · Higher is better</span>
+        </div>
+        <div class="hbar-list" id="lang-bars"></div>
+      </div>
+    </section>
+  </div>
+
+  <hr class="hr" />
+
+  <div class="wrap">
+    <section class="section" id="severity">
+      <h2>Severity</h2>
+      <p class="section-intro">
+        All deduplicated findings, not only targeted HIGH and MEDIUM. Volume is not the ranking metric.
+        A model can emit many LOW findings and still lead on secure rate.
+      </p>
+      <div class="chart-card" style="padding:0 18px">
+      {models.map((m) => {
+        const tot = m.severity.HIGH + m.severity.MEDIUM + m.severity.LOW || 1;
+        const mm = modelMeta(m.id);
+        return (
+          <div class="sev-row mrow" data-id={m.id} data-type={m.type} data-vendor={mm.vendor} data-weights={mm.weights} data-name={m.name}>
+            <div class="model-cell">
+              <img class="logo" src={withBase(mm.logo)} alt="" />
+              <div>
+                <strong>{m.name}</strong>
+                <div class="sev" style="margin-top:2px">
+                  <span class="h">H {m.severity.HIGH}</span>
+                  · <span class="m">M {m.severity.MEDIUM}</span>
+                  · <span class="l">L {m.severity.LOW}</span>
+                </div>
+              </div>
+            </div>
+            <div class="bar-stack" aria-hidden="true">
+              <span class="h" style={`width:${(m.severity.HIGH / tot) * (tot / maxSev) * 100}%`}></span>
+              <span class="m" style={`width:${(m.severity.MEDIUM / tot) * (tot / maxSev) * 100}%`}></span>
+              <span class="l" style={`width:${(m.severity.LOW / tot) * (tot / maxSev) * 100}%`}></span>
+            </div>
+            <div class="num faint">{m.severity.HIGH + m.severity.MEDIUM + m.severity.LOW}</div>
+          </div>
+        );
+      })}
+      </div>
+    </section>
+  </div>
+
+  <hr class="hr" />
+
+  <div class="wrap">
+    <section class="section" id="why">
+      <h2>Why this benchmark is different</h2>
+      <p class="section-intro">
+        Most cyber evaluations score models on finding or exploiting bugs. This study scores them on
+        writing code that does not introduce them.
+      </p>
+      <div class="card" style="overflow:hidden">
+        <table class="compare">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Typical cyber benchmark</th>
+              <th>SecureCode Arena</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>What we ask</td>
+              <td class="muted">Find or exploit a vulnerability, often with source or hints.</td>
+              <td class="ours">Write working code from a neutral functional prompt. No security wording.</td>
+            </tr>
+            <tr>
+              <td>What a win is</td>
+              <td class="muted">More labs solved, more vulnerabilities found.</td>
+              <td class="ours">More prompts with no targeted HIGH or MEDIUM finding.</td>
+            </tr>
+            <tr>
+              <td>Who is tested</td>
+              <td class="muted">Cloud agents and large models, usually.</td>
+              <td class="ours">The same 16 prompts on 3 local SLMs and 6 cloud LLMs, including a Qwen size ladder.</td>
+            </tr>
+            <tr>
+              <td>The research gap</td>
+              <td class="muted">SLM evaluations have measured correctness and efficiency, not security of generated code.</td>
+              <td class="ours">Closes that gap: vulnerable-code rate, CWE mix, language, SLM vs LLM (descriptive).</td>
+            </tr>
+            <tr>
+              <td>How we count</td>
+              <td class="muted">Often a single flag or the model's last answer.</td>
+              <td class="ours">Parse gate, then Bandit, Gosec and Semgrep, deduplicated on (CWE, line), targeted HIGH/MEDIUM only.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <hr class="hr" />
+
+  <div class="wrap">
+    <section class="section" id="how">
+      <h2>How a finding is scored</h2>
+      <p class="section-intro">
+        Three nested measurement levels. The leaderboard uses the strictest one.
+        <a href={withBase("/methodology/")} style="color:var(--accent-2)">Full methodology →</a>
+      </p>
+      <div class="steps">
+        <div class="step">
+          <div class="n">1 · All findings</div>
+          <p class="muted" style="margin:0">A prompt counts if any repetition produced any static-analysis finding, including generic noise.</p>
+        </div>
+        <div class="step">
+          <div class="n">2 · Targeted</div>
+          <p class="muted" style="margin:0">Keep only CWEs the project was designed to provoke. Drop debug=True, subprocess import, no-timeout requests, and similar noise.</p>
+        </div>
+        <div class="step">
+          <div class="n">3 · Targeted HIGH/MEDIUM</div>
+          <p class="muted" style="margin:0">The ranking metric. A prompt is vulnerable if at least one of three repetitions produced a HIGH or MEDIUM targeted finding. Secure rate is 1 minus that fraction.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="tooltip" id="tip" hidden></div>
+</Base>
+
+<script define:vars={{ payload, vendors: vendors.map((v) => ({ name: v, color: vendorColor(v) })), basePath: import.meta.env.BASE_URL }}>
+  const COLORS = { open: "#4D7CFE", proprietary: "#C17A56", SLM: "#e11d2e", LLM: "#171717" };
+  const state = { set: "all", color: "vendor", search: "", metric: "secure", lang: "python" };
+  const vbars = document.getElementById("vbars");
+  const legend = document.getElementById("legend");
+  const langBars = document.getElementById("lang-bars");
+  const tip = document.getElementById("tip");
+  const hint = document.getElementById("score-hint");
+
+  function colorOf(m) {
+    if (state.color === "weights") return COLORS[m.weights];
+    if (state.color === "type") return COLORS[m.type];
+    return m.color;
+  }
+  function visible(m) {
+    const q = state.search.trim().toLowerCase();
+    if (state.set === "SLM" || state.set === "LLM") {
+      if (m.type !== state.set) return false;
+    } else if (state.set === "open" || state.set === "proprietary") {
+      if (m.weights !== state.set) return false;
+    } else if (state.set.startsWith("vendor:")) {
+      if (m.vendor !== state.set.slice(7)) return false;
+    }
+    if (q && !m.name.toLowerCase().includes(q) && !m.vendor.toLowerCase().includes(q)) {
+      return "dim";
+    }
+    return true;
+  }
+  function metricOf(m) {
+    if (state.metric === "vulnerable") return m.vulnerable;
+    if (state.metric === "findings") return m.findings;
+    return m.secure;
+  }
+  function maxMetric() {
+    if (state.metric === "findings") return Math.max(...payload.map((m) => m.findings));
+    return 16;
+  }
+
+  function renderLegend() {
+    let items = [];
+    if (state.color === "vendor") items = vendors.map((v) => ({ n: v.name, c: v.color }));
+    else if (state.color === "weights") items = [{ n: "Open weights", c: COLORS.open }, { n: "Proprietary", c: COLORS.proprietary }];
+    else items = [{ n: "SLM", c: COLORS.SLM }, { n: "LLM", c: COLORS.LLM }];
+    legend.innerHTML = items.map((i) => `<span><i class="swatch" style="background:${i.c}"></i>${i.n}</span>`).join("");
+  }
+
+  function bindHover(el, m) {
+    el.addEventListener("pointerenter", (e) => showTip(e, m));
+    el.addEventListener("pointermove", (e) => moveTip(e));
+    el.addEventListener("pointerleave", hideTip);
+  }
+  function showTip(e, m) {
+    tip.hidden = false;
+    tip.classList.add("on");
+    tip.innerHTML = `
+      <div class="t-name"><img class="logo" src="${m.logo}" alt="">${m.name}</div>
+      <div class="t-row"><span>${m.vendor} · ${m.type}</span><span>${m.weights === "open" ? "Open weights" : "Proprietary"}</span></div>
+      <div class="t-row"><span>Secure</span><span>${m.secure}/16</span></div>
+      <div class="t-row"><span>Vulnerable</span><span>${m.vulnerable}/16</span></div>
+      <div class="t-row"><span>Findings</span><span>H ${m.high} · M ${m.med} · L ${m.low}</span></div>
+      <div class="t-row"><span>Valid files</span><span>${m.valid}/${m.files}</span></div>`;
+    moveTip(e);
+  }
+  function moveTip(e) {
+    tip.style.left = e.clientX + "px";
+    tip.style.top = e.clientY - 12 + "px";
+  }
+  function hideTip() {
+    tip.classList.remove("on");
+  }
+
+  function renderScore() {
+    const max = maxMetric() || 1;
+    const hints = {
+      secure: "prompts secure, of 16 · Higher is better",
+      vulnerable: "prompts with a targeted HIGH/MEDIUM finding · Lower is better",
+      findings: "deduplicated findings · Lower is better",
+    };
+    hint.textContent = hints[state.metric];
+    vbars.innerHTML = "";
+
+    // Keep the axis inside the plot area. Removing the previous grid before
+    // rendering prevents stale labels from stacking when the metric changes.
+    vbars.querySelectorAll(':scope > .y-grid').forEach(el => el.remove());
+    const gridDiv = document.createElement('div');
+    gridDiv.className = 'y-grid';
+    // Choose nice tick values
+    const ticks = state.metric === 'findings'
+      ? [0, 20, 40, 60, 80, 100].filter(t => t <= max + 10)
+      : [0, 4, 8, 12, 16].filter(t => t <= max);
+    ticks.forEach(t => {
+      const pct = (t / max) * 100;
+      const line = document.createElement('div');
+      line.className = 'y-line';
+      line.style.bottom = `${pct}%`;
+      line.innerHTML = `<span class="y-label">${t}</span>`;
+      gridDiv.appendChild(line);
+    });
+    vbars.prepend(gridDiv);
+    payload.forEach((m) => {
+      const vis = visible(m);
+      if (vis === false) return;
+      const v = metricOf(m);
+      const a = document.createElement("a");
+      a.className = "vbar" + (vis === "dim" ? " dim" : "");
+      a.href = `${basePath}models/${m.slug}/`;
+      a.innerHTML = `
+        <div class="vbar-col" style="--h:${(v / max) * 100}%;--c:${colorOf(m)}">
+          <span class="vbar-val">${v}</span>
+          <i></i>
+        </div>
+        <img class="logo" src="${m.logo}" alt="${m.name}" title="${m.name}">
+        <div class="vbar-label"><span class="vbar-name">${m.short}</span></div>`;
+      bindHover(a, m);
+      vbars.appendChild(a);
+    });
+  }
+
+  function renderLang() {
+    const key = state.lang === "python" ? "py" : state.lang === "go" ? "go" : "js";
+    langBars.innerHTML = "";
+    const sorted = [...payload].sort((a, b) => b[key] - a[key]);
+    sorted.forEach((m) => {
+      const vis = visible(m);
+      if (vis === false) return;
+      const a = document.createElement("a");
+      a.className = "hbar" + (vis === "dim" ? " dim" : "");
+      a.href = `${basePath}models/${m.slug}/`;
+      const pct = Math.round(m[key] * 1000) / 10;
+      a.innerHTML = `
+        <div class="meta">
+          <img class="logo" src="${m.logo}" alt="">
+          <div><div class="name">${m.name}</div><div class="sub">${m.vendor}</div></div>
+        </div>
+        <div class="hbar-track"><i style="--w:${m[key] * 100}%;--c:${colorOf(m)}"></i></div>
+        <div class="num">${pct}%</div>`;
+      bindHover(a, m);
+      langBars.appendChild(a);
+    });
+  }
+
+  function applyRows() {
+    document.querySelectorAll(".mrow").forEach((row) => {
+      const m = {
+        id: row.dataset.id,
+        type: row.dataset.type,
+        vendor: row.dataset.vendor,
+        weights: row.dataset.weights,
+        name: row.dataset.name,
+      };
+      const vis = visible(m);
+      row.classList.toggle("hide", vis === false);
+      row.classList.toggle("dim", vis === "dim");
+    });
+  }
+
+  function render() {
+    renderLegend();
+    renderScore();
+    renderLang();
+    applyRows();
+  }
+
+  document.getElementById("f-set").addEventListener("change", (e) => {
+    state.set = e.target.value;
+    render();
+  });
+  document.getElementById("f-search").addEventListener("input", (e) => {
+    state.search = e.target.value;
+    render();
+  });
+  document.querySelectorAll("#filters [data-color]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.color = btn.dataset.color;
+      document.querySelectorAll("#filters [data-color]").forEach((b) => b.classList.toggle("on", b === btn));
+      render();
+    });
+  });
+  document.querySelectorAll("#score-tabs [data-metric]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.metric = btn.dataset.metric;
+      document.querySelectorAll("#score-tabs [data-metric]").forEach((b) => b.classList.toggle("on", b === btn));
+      renderScore();
+    });
+  });
+  document.querySelectorAll("#lang-tabs [data-lang]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.lang = btn.dataset.lang;
+      document.querySelectorAll("#lang-tabs [data-lang]").forEach((b) => b.classList.toggle("on", b === btn));
+      renderLang();
+    });
+  });
+
+  render();
+</script>

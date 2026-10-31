@@ -1,0 +1,169 @@
+---
+import Base from "../../layouts/Base.astro";
+import data from "../../data/data.json";
+import findingsMap from "../../data/findings.json";
+import { pct, fraction, cweHref, langLabel, projectLabel } from "../../lib/format";
+import { modelMeta } from "../../lib/vendors";
+import { withBase } from "../../lib/paths";
+
+export function getStaticPaths() {
+  return data.models.map((m) => ({ params: { slug: m.slug } }));
+}
+
+const { slug } = Astro.params;
+const model = data.models.find((m) => m.slug === slug)!;
+const allFindings = findingsMap as Record<string, Array<{
+  project: string;
+  language: string;
+  file: string;
+  line: number | null;
+  cwe: string;
+  severity: string;
+  tool: string;
+  rule_id: string;
+  message: string;
+}>>;
+const findings = allFindings[model.id] ?? [];
+const cwes = data.cwe_distribution
+  .map((c) => ({
+    cwe: c.cwe,
+    name: c.name,
+    n: c.per_model[model.id] ?? 0,
+  }))
+  .filter((c) => c.n > 0)
+  .sort((a, b) => b.n - a.n);
+const totSev = model.severity.HIGH + model.severity.MEDIUM + model.severity.LOW;
+const langs = Object.entries(model.by_language);
+const mm = modelMeta(model.id);
+---
+<Base title={`${model.name} · ${data.meta.title}`} active="leaderboard" description={`${model.name}: ${fraction(model.secure_prompts, model.total_prompts)} prompts secure.`}>
+  <div class="wrap page">
+    <p class="eyebrow"><a href={withBase("/#leaderboard")} style="color:var(--faint)">Leaderboard</a></p>
+    <div class="model-hero">
+      <div>
+        <h1 class="model-cell" style="gap:12px">
+          <img class="logo lg" src={withBase(mm.logo)} alt="" />
+          {model.name}
+        </h1>
+        <p class="muted" style="margin:0">
+          <span class={`badge ${model.type.toLowerCase()}`}>{model.type}</span>
+          {" "}{mm.vendor}
+          {model.size ? ` · ${model.size}` : ""}
+          · {mm.weights === "open" ? "Open weights" : "Proprietary"}
+          · rank {model.rank} of {data.meta.models_total}
+        </p>
+      </div>
+      <div class="big-stat">
+        {fraction(model.secure_prompts, model.total_prompts)}
+        <small>{pct(model.secure_rate)} secure. {model.vulnerable_prompts} of {model.total_prompts} prompts with a targeted HIGH/MEDIUM finding</small>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <section class="card" style="padding:20px">
+        <h3>Severity</h3>
+        <p class="faint" style="margin:0 0 12px;font-size:13px">All deduplicated findings, not just targeted.</p>
+        <div class="bar-stack" style="height:14px;margin-bottom:12px">
+          {totSev > 0 && (
+            <>
+              <span class="h" style={`width:${(model.severity.HIGH / totSev) * 100}%`}></span>
+              <span class="m" style={`width:${(model.severity.MEDIUM / totSev) * 100}%`}></span>
+              <span class="l" style={`width:${(model.severity.LOW / totSev) * 100}%`}></span>
+            </>
+          )}
+        </div>
+        <p class="sev" style="margin:0">
+          <span class="h">HIGH {model.severity.HIGH}</span>
+          · <span class="m">MEDIUM {model.severity.MEDIUM}</span>
+          · <span class="l">LOW {model.severity.LOW}</span>
+          · {totSev} total
+        </p>
+      </section>
+      <section class="card" style="padding:20px">
+        <h3>Validity</h3>
+        <p class="faint" style="margin:0 0 12px;font-size:13px">{model.files_total} files · parse/compile gate</p>
+        <div class="track" style="height:14px;margin-bottom:12px">
+          <span class="valid" style={`width:${model.valid_rate * 100}%`}></span>
+          <span class="invalid" style={`width:${(1 - model.valid_rate) * 100}%`}></span>
+        </div>
+        <p class="muted" style="margin:0;font-size:14px">
+          {model.files_valid} valid · {model.files_invalid} invalid · {pct(model.valid_rate)} valid
+        </p>
+      </section>
+    </div>
+
+    <section style="margin-top:28px">
+      <h2>By language</h2>
+      <p class="section-intro">Targeted HIGH/MEDIUM secure rate. Python has 6 prompts (includes the control); Go and JavaScript have 5.</p>
+      <div class="table-wrap">
+        <table class="lb" style="min-width:0">
+          <thead>
+            <tr><th>Language</th><th class="right">Secure</th><th class="right">Vulnerable</th></tr>
+          </thead>
+          <tbody>
+            {langs.map(([lang, st]) => (
+              <tr>
+                <td>{langLabel(lang)}</td>
+                <td class="right num">{fraction(st.secure_prompts, st.total_prompts)} ({pct(st.secure_rate)})</td>
+                <td class="right num">{st.vulnerable_prompts}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section style="margin-top:36px">
+      <h2>CWE distribution</h2>
+      <p class="section-intro">This model’s column from the site-wide heatmap. Zero-count CWEs omitted.</p>
+      {cwes.length === 0 ? (
+        <p class="muted">No findings recorded.</p>
+      ) : (
+        <div class="score-list">
+          {cwes.map((c) => (
+            <div class="score-row" style="grid-template-columns: 90px 1fr auto">
+              <a href={cweHref(c.cwe)}>{c.cwe}</a>
+              <span class="muted" style="font-size:13px">{c.name}</span>
+              <span class="score-num">{c.n}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+
+    <section style="margin-top:36px">
+      <h2>Findings</h2>
+      <p class="section-intro">{findings.length} deduplicated findings from {data.meta.tools.join(", ")}.</p>
+      <div class="table-wrap">
+        <table class="findings">
+          <thead>
+            <tr>
+              <th>Project</th>
+              <th>Lang</th>
+              <th>File</th>
+              <th>Line</th>
+              <th>CWE</th>
+              <th>Sev</th>
+              <th>Tool</th>
+              <th>Message</th>
+            </tr>
+          </thead>
+          <tbody>
+            {findings.map((f) => (
+              <tr>
+                <td>{projectLabel(f.project)}</td>
+                <td>{langLabel(f.language)}</td>
+                <td class="num">{f.file}</td>
+                <td class="num">{f.line ?? "n/a"}</td>
+                <td><a href={cweHref(f.cwe)}>{f.cwe}</a></td>
+                <td class={f.severity === "HIGH" ? "h" : f.severity === "MEDIUM" ? "m" : "l"}>{f.severity}</td>
+                <td>{f.tool}</td>
+                <td class="msg">{f.message}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</Base>

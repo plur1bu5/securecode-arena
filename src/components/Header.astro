@@ -1,0 +1,68 @@
+---
+import { withBase } from "../lib/paths";
+
+interface Props { active?: string }
+const { active = "leaderboard" } = Astro.props;
+const links = [
+  { href: withBase("/"), id: "leaderboard", label: "Leaderboard" },
+  { href: withBase("/methodology/"), id: "methodology", label: "Methodology" },
+  { href: withBase("/research/"), id: "research", label: "Research" },
+  { href: withBase("/projects/"), id: "projects", label: "Projects" },
+  { href: withBase("/about/"), id: "about", label: "About" },
+];
+---
+<header class="site-header" id="site-header">
+  <div class="header-inner">
+    <a class="wordmark" href={withBase("/")} aria-label="SecureCode Arena home">
+      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+        <rect width="22" height="22" rx="5" fill="#e11d2e"/>
+        <rect x="5" y="11" width="3" height="6" rx="1" fill="#fff"/>
+        <rect x="9.5" y="7" width="3" height="10" rx="1" fill="#fff"/>
+        <rect x="14" y="5" width="3" height="12" rx="1" fill="#fff"/>
+      </svg>
+      SecureCode Arena
+    </a>
+    <nav class="nav" aria-label="Primary">
+      {links.map((l) => (
+        <a href={l.href} class={active === l.id ? "active" : undefined}>{l.label}</a>
+      ))}
+    </nav>
+    <div class="header-actions">
+      <button class="menu-btn" type="button" id="menu-btn" aria-expanded="false" aria-controls="site-header">Menu</button>
+      <button class="theme-btn" type="button" id="theme-btn" aria-label="Switch to dark theme" aria-pressed="false">
+        <span class="theme-label">Dark</span>
+      </button>
+    </div>
+  </div>
+</header>
+<script is:inline>
+  (function () {
+    const header = document.getElementById("site-header");
+    const btn = document.getElementById("menu-btn");
+    btn?.addEventListener("click", () => {
+      const open = header.classList.toggle("open");
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+
+    const themeBtn = document.getElementById("theme-btn");
+    const root = document.documentElement;
+    function current() {
+      return root.dataset.theme === "dark" ? "dark" : "light";
+    }
+    function sync() {
+      const t = current();
+      const isDark = t === "dark";
+      themeBtn?.setAttribute("aria-pressed", isDark ? "true" : "false");
+      themeBtn?.setAttribute("aria-label", isDark ? "Switch to light theme" : "Switch to dark theme");
+      const label = themeBtn?.querySelector(".theme-label");
+      if (label) label.textContent = isDark ? "Light" : "Dark";
+    }
+    sync();
+    themeBtn?.addEventListener("click", () => {
+      const next = current() === "dark" ? "light" : "dark";
+      root.dataset.theme = next;
+      localStorage.setItem("theme", next);
+      sync();
+    });
+  })();
+</script>
