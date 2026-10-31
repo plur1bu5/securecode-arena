@@ -41,7 +41,7 @@ SecureCode Arena measures whether a model, given only a functional specification
       survive a parse and compile gate, cross-tool static analysis, and CWE filtering count.
 </p> <div class="stats-row"> <div class="stat-tile"><div class="n">9</div><div class="l">models</div></div> <div class="stat-tile"><div class="n">16</div><div class="l">prompts</div></div> <div class="stat-tile"><div class="n">432</div><div class="l">generated files</div></div> <div class="stat-tile"><div class="n">3</div><div class="l">languages</div></div> </div> <h2>Overview</h2> <p> 9 models × 16 prompts × 3 repetitions =
 432 generated files. 5 files failed the functional gate
-      and are excluded from denominators. 524 deduplicated findings remain
+      and are excluded from denominators. 418 deduplicated findings remain
       on 427 valid files. Tools: Bandit 1.9.4, Gosec (dev), Semgrep 1.182.1.
 </p> <ul> <li>Prompts request functionality only. They never mention security, sanitization, hashing strength, or injection.</li> <li>Every model sees the same prompt text. Only the language and framework change.</li> <li>Three nested metrics are reported. The leaderboard uses the strictest: targeted HIGH and MEDIUM.</li> </ul> <h2>Why neutral prompts</h2> <p>
 Asking a model to write vulnerable code tests instruction following, not what it emits
@@ -63,7 +63,10 @@ Three local SLMs (Qwen2.5-Coder 1.5B and 7B, Llama 3.1 8B) and six cloud LLMs
 </p> <table> <thead><tr><th>Model</th><th>Type</th><th>Why it is in the set</th></tr></thead> <tbody> <tr><td>Qwen2.5-Coder 1.5B</td><td>SLM</td><td>Small end of the Qwen size ladder.</td></tr> <tr><td>Qwen2.5-Coder 7B</td><td>SLM</td><td>Mid-size code specialist, strong in Hasan et al. (2026).</td></tr> <tr><td>Llama 3.1 8B</td><td>SLM</td><td>General-purpose control, not code-specialized.</td></tr> <tr><td>Qwen3-Coder Next</td><td>LLM</td><td>Code-specialized Qwen LLM, top of the same-family ladder.</td></tr> <tr><td>Claude Sonnet 4.5</td><td>LLM</td><td>Widely used coding assistant.</td></tr> <tr><td>GPT-5.6 Luna</td><td>LLM</td><td>Widely used assistant.</td></tr> <tr><td>DeepSeek V4 Pro</td><td>LLM</td><td>Strong coding model from a different provider family.</td></tr> <tr><td>Gemini 3.5 Flash-Lite</td><td>LLM</td><td>Lightweight cloud tier.</td></tr> <tr><td>Grok 4.7</td><td>LLM</td><td>Ninth configuration. All 48 files valid.</td></tr> </tbody> </table> <h2>Detection</h2> <p>
 Python: Bandit and Semgrep. Go: Gosec and Semgrep. JavaScript: Semgrep only.
       The same CWE on the same line is often flagged twice. We deduplicate on
-<code>(cwe, line)</code>, keep the highest severity, and record every contributing tool.
+<code>(canonical_cwe, line)</code>, keep the highest severity, and record every contributing tool.
+      Equivalent CWEs from different tools are merged before deduplication — for example,
+      Bandit maps <code>debug=True</code> to CWE-94 while Semgrep maps it to CWE-489; both are
+      canonicalized to CWE-94 so the same statement is not counted twice.
       Without that, Python and Go would be biased toward higher counts than JavaScript.
 </p> <h2>Functional gate</h2> <p>
 Before analysis: Python <code>ast.parse()</code>, Go <code>gofmt -e</code>,
