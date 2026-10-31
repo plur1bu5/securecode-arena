@@ -100,7 +100,10 @@ const { meta, projects } = data;
     <p>
       Python: Bandit and Semgrep. Go: Gosec and Semgrep. JavaScript: Semgrep only.
       The same CWE on the same line is often flagged twice. We deduplicate on
-      <code>(cwe, line)</code>, keep the highest severity, and record every contributing tool.
+      <code>(canonical_cwe, line)</code>, keep the highest severity, and record every contributing tool.
+      Equivalent CWEs from different tools are merged before deduplication — for example,
+      Bandit maps <code>debug=True</code> to CWE-94 while Semgrep maps it to CWE-489; both are
+      canonicalized to CWE-94 so the same statement is not counted twice.
       Without that, Python and Go would be biased toward higher counts than JavaScript.
     </p>
 

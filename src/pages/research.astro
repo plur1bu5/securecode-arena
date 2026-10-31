@@ -35,10 +35,10 @@ const toc = [
         wording in any prompt. Every generated file passed a parse/compile gate, then was scanned with
         Bandit, Gosec, and Semgrep, deduplicated on (CWE, line), and classified by severity. We find
         that the three SLMs produce code with a targeted HIGH/MEDIUM vulnerability on 31.2% of prompts
-        on average, versus 15.6% for the six LLMs, a roughly 2× gap. Command injection, insecure
+        on average, versus 15.6% for the six LLMs, a roughly 2× gap on this sample. Command injection, insecure
         deserialization, and cleartext transmission are the most frequent classes. The results suggest
-        that compact models are not only cheaper to run but measurably more likely to emit vulnerable
-        code, and that static analysis of generated code is a necessary, not optional, step.
+        that compact models are not only cheaper to run but also more likely to emit vulnerable
+        code on this benchmark, and that static analysis of generated code is a necessary, not optional, step.
       </p>
 
       <h2 id="intro">1. Introduction: the problem</h2>
@@ -184,9 +184,9 @@ const toc = [
       </figure>
       <p>
         The most frequent classes are <strong>CWE-319</strong> (cleartext transmission: serving HTTP without TLS,
-        96 findings), <strong>CWE-489/94</strong> (debug code / code injection: Flask <code>debug=True</code>, 82 each),
+        96 findings), <strong>CWE-94</strong> (debug code / code injection: Flask <code>debug=True</code>, 82),
         <strong>CWE-502</strong> (insecure deserialization: <code>pickle</code>/<code>eval</code>, 72), and <strong>CWE-78</strong> (command injection,
-        51). CWE-319 and the debug-code classes are near-universal across both SLMs and LLMs. They are
+        51). CWE-319 and the debug-code class are near-universal across both SLMs and LLMs. They are
         the defaults a model reaches for when writing an API quickly. The classes that
         actually <em>discriminate</em> (SQL injection, CWE-89; command injection, CWE-78; insecure
         deserialization) are where the SLMs lose ground.
@@ -200,7 +200,9 @@ const toc = [
       <p>
         Python is the worst language for both groups (SLMs 44.4%, LLMs 19.4% of prompts vulnerable),
         expected, since the deserialization and command-injection prompts are Python-native. Go is the
-        safest (SLMs 13.3%, LLMs 0.0%). JavaScript sits between. This mirrors Hasan et al.'s finding
+        safest (SLMs 13.3%, LLMs 0.0%). JavaScript sits between (SLMs 33.3%, LLMs 26.7%), though its
+        rates should be read with caution: JavaScript is covered by Semgrep only, versus two tools for
+        Python and Go, so some findings may go undetected. This mirrors Hasan et al.'s finding
         that SLMs are weakest on Go: weak proficiency does not translate to <em>more</em> vulnerabilities here;
         the language's own constraints (typed, no <code>eval</code>, no shell-by-default) are doing protective work.
       </p>
@@ -221,13 +223,15 @@ const toc = [
       <p>Three takeaways.</p>
       <p>
         <strong>1. Size tracks security, but not the way one might assume.</strong> The gap is not that large models
-        are safer because they are more capable. It is that the <em>code-specialized and alignment-heavy</em>
-        models (Claude, GPT, Grok, Qwen3-Coder) consistently refuse or avoid the dangerous construct,
-        while the small local models default to it. The smallest model in the set, Qwen2.5-Coder 1.5B,
-        is no worse than Llama 3.1 8B. Size within the SLM group does not buy security.
+        are safer because they are more capable. It is that the <em>most aligned</em>
+        models (GPT-5.6 Luna and Grok 4.7 record zero HIGH findings; Claude and Qwen3-Coder
+        are close behind) tend to avoid the dangerous construct, while the small local models
+        default to it. The alignment advantage is not uniform across all four top LLMs, but the
+        pattern is consistent enough to be worth noting. The smallest model in the set,
+        Qwen2.5-Coder 1.5B, is no worse than Llama 3.1 8B. Size within the SLM group does not buy security.
       </p>
       <p>
-        <strong>2. The dangerous constructs are habits, not bugs.</strong> CWE-319 (no TLS) and CWE-489/94
+        <strong>2. The dangerous constructs are habits, not bugs.</strong> CWE-319 (no TLS) and CWE-94
         (<code>debug=True</code>) dominate because they are the <em>default</em> shape of a quickly written API. A model
         does not decide to be insecure here; it reaches for the shortest path. This is exactly what
         static analysis catches well, and exactly what a reviewer skimming for "does it work" misses.
