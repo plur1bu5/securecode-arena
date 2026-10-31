@@ -29,6 +29,18 @@ The headline result: the local SLMs averaged a 31.2% vulnerable-prompt rate, com
 
 The site is static and built with [Astro](https://astro.build/).
 
+## Scope and limitations
+
+This is a defensive static-analysis benchmark, not a proof that a model's output is safe or unsafe in every context. Results are descriptive: the sample is limited to nine models, cloud sampling settings are not fully controlled, and static analyzers can produce false positives and false negatives. Generated code is not executed.
+
+## Related work
+
+These papers directly motivated the study and are cited in the research paper:
+
+- Hasan, M. M., et al. (2026). *Evaluation of small language models on code generation benchmarks (HumanEval, MBPP, Mercury, HumanEvalPack, CodeXGLUE).* Cited for the explicit statement that those metrics do not account for the security of generated code.
+- Wu, T., et al. (2026). *Last Secure Code Benchmark: Is the Code You Vibe Secure?* arXiv:[2610.14766](https://arxiv.org/abs/2610.14766). Agent-scale secure code generation across function, file, and repository tasks — complementary scope to this study.
+- MITRE. *Common Weakness Enumeration.* [https://cwe.mitre.org/](https://cwe.mitre.org/)
+
 ## Run locally
 
 ```bash
@@ -44,32 +56,9 @@ npm run build
 
 The generated static site is written to `dist/`.
 
-## Project structure
-
-```text
-src/pages/        Site routes and model pages
-src/data/         Benchmark data and findings
-src/components/   Shared UI components
-public/           Images, logos, figures, and other public assets
-```
-
-## Scope and limitations
-
-This is a defensive static-analysis benchmark, not a proof that a model's output is safe or unsafe in every context. Results are descriptive: the sample is limited to nine models, cloud sampling settings are not fully controlled, and static analyzers can produce false positives and false negatives. Generated code is not executed.
-
-## Related work
-
-These papers directly motivated the study and are cited in the research paper:
-
-- Hasan, M. M., et al. (2026). *Evaluation of small language models on code generation benchmarks (HumanEval, MBPP, Mercury, HumanEvalPack, CodeXGLUE).* Cited for the explicit statement that those metrics do not account for the security of generated code.
-- Wu, T., et al. (2026). *Last Secure Code Benchmark: Is the Code You Vibe Secure?* arXiv:[2610.14766](https://arxiv.org/abs/2610.14766). Agent-scale secure code generation across function, file, and repository tasks — complementary scope to this study.
-- MITRE. *Common Weakness Enumeration.* [https://cwe.mitre.org/](https://cwe.mitre.org/)
-
-## Credits
+## Credits & License
 
 Built by [Blessed (@plur1bu5)](https://github.com/plur1bu5) and [Maryam (@iblihimaryam306-dotcom)](https://github.com/iblihimaryam306-dotcom).
-
-## License
 
 MIT © plur1bu5, iblihimaryam306-dotcom
 
