@@ -1,0 +1,188 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><script>
+      (function () {
+        var t = localStorage.getItem("theme");
+        document.documentElement.dataset.theme = t === "dark" ? "dark" : "light";
+      })();
+    </script><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="Are Small Language Models Safe Coders? A defensive benchmark of AI-generated code security."><meta name="color-scheme" content="light dark"><title>Research · SLM SecureCode Arena</title><link rel="icon" href="/securecode-arena/favicon.svg" type="image/svg+xml"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="/securecode-arena/_astro/about.CAlt4r72.css"></head> <body> <header class="site-header" id="site-header"> <div class="header-inner"> <a class="wordmark" href="/securecode-arena/" aria-label="SecureCode Arena home"> <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"> <rect width="22" height="22" rx="5" fill="#e11d2e"></rect> <rect x="5" y="11" width="3" height="6" rx="1" fill="#fff"></rect> <rect x="9.5" y="7" width="3" height="10" rx="1" fill="#fff"></rect> <rect x="14" y="5" width="3" height="12" rx="1" fill="#fff"></rect> </svg>
+SecureCode Arena
+</a> <nav class="nav" aria-label="Primary"> <a href="/securecode-arena/">Leaderboard</a><a href="/securecode-arena/methodology/">Methodology</a><a href="/securecode-arena/research/" class="active">Research</a><a href="/securecode-arena/projects/">Projects</a><a href="/securecode-arena/about/">About</a> </nav> <div class="header-actions"> <button class="menu-btn" type="button" id="menu-btn" aria-expanded="false" aria-controls="site-header">Menu</button> <button class="theme-btn" type="button" id="theme-btn" aria-label="Switch to dark theme" aria-pressed="false"> <span class="theme-label">Dark</span> </button> </div> </div> </header> <script>
+  (function () {
+    const header = document.getElementById("site-header");
+    const btn = document.getElementById("menu-btn");
+    btn?.addEventListener("click", () => {
+      const open = header.classList.toggle("open");
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+
+    const themeBtn = document.getElementById("theme-btn");
+    const root = document.documentElement;
+    function current() {
+      return root.dataset.theme === "dark" ? "dark" : "light";
+    }
+    function sync() {
+      const t = current();
+      const isDark = t === "dark";
+      themeBtn?.setAttribute("aria-pressed", isDark ? "true" : "false");
+      themeBtn?.setAttribute("aria-label", isDark ? "Switch to light theme" : "Switch to dark theme");
+      const label = themeBtn?.querySelector(".theme-label");
+      if (label) label.textContent = isDark ? "Light" : "Dark";
+    }
+    sync();
+    themeBtn?.addEventListener("click", () => {
+      const next = current() === "dark" ? "light" : "dark";
+      root.dataset.theme = next;
+      localStorage.setItem("theme", next);
+      sync();
+    });
+  })();
+</script> <main>  <div class="doc"> <nav class="toc" aria-label="Contents"> <p>Contents</p> <a href="#abstract">Abstract</a><a href="#intro">1. Introduction</a><a href="#rqs">2. Research questions</a><a href="#method">3. Method</a><a href="#results">4. Results</a><a href="#discussion">5. Discussion</a><a href="#limitations">6. Limitations</a><a href="#references">References</a> </nav> <article class="prose"> <h1>Are Small Language Models Safe Coders? A Defensive Benchmark of AI-Generated Code Security</h1> <h2 id="abstract">Abstract</h2> <p>
+Small Language Models (SLMs) are increasingly used to generate code in resource-constrained
+        settings, but whether that code is <em>secure</em> remains largely unmeasured. Prior work (Hasan et
+        al., 2026) evaluated 20 SLMs on functional correctness, efficiency, and language coverage,
+        and explicitly did <strong>not</strong> evaluate security. We close that gap. We asked 9 models (3 local
+        SLMs and 6 cloud LLMs) to implement 16 neutral functional coding tasks (6 projects across
+        Python, Go, and JavaScript) that carry natural security-sensitive contexts, with no security
+        wording in any prompt. Every generated file passed a parse/compile gate, then was scanned with
+        Bandit, Gosec, and Semgrep, deduplicated on (CWE, line), and classified by severity. We find
+        that the three SLMs produce code with a targeted HIGH/MEDIUM vulnerability on 31.2% of prompts
+        on average, versus 15.6% for the six LLMs, a roughly 2× gap. Command injection, insecure
+        deserialization, and cleartext transmission are the most frequent classes. The results suggest
+        that compact models are not only cheaper to run but measurably more likely to emit vulnerable
+        code, and that static analysis of generated code is a necessary, not optional, step.
+</p> <h2 id="intro">1. Introduction: the problem</h2> <p>
+AI-generated code now ships in production, but most benchmarks score models on whether the code
+<em>works</em>, not whether it is <em>safe</em>. A function can pass every unit test and still concatenate SQL,
+        spawn a shell with untrusted input, or deserialize network data with <code>pickle</code>. Hasan et al. (2026)
+        made this gap explicit: their metrics for SLMs cover pass@k, VRAM, and latency, and "do not
+        account for the security of generated code."
+</p> <p>
+Related agent-scale work, including LSCBench (Wu et al., 2026), likewise finds that functional
+        pass rates far exceed the rate at which generated code is both functional and secure. That
+        evaluation covers frontier agents at function, file, and repository granularity. The present
+        study is complementary: it measures local SLMs against cloud LLMs on a shared, security-neutral
+        prompt set, under a static-analysis protocol designed for generated snippets rather than full
+        agent trajectories.
+</p> <p>
+SLMs matter here precisely because they run on modest hardware (a laptop, a phone, a
+        CI runner) where a human reviewer is least likely to be present. If a 1.5B model is both the
+        cheapest option and the most likely to emit an injection bug, that is a decision a practitioner
+        needs to make with data, not intuition.
+</p> <p>
+This benchmark measures one thing: when a model is asked only for <em>functionality</em>, how often does
+        it introduce a security vulnerability on its own, with no prompting in either direction?
+</p> <h2 id="rqs">2. Research questions</h2> <table> <thead> <tr><th>RQ</th><th>Question</th><th>How we measure</th></tr> </thead> <tbody> <tr><td>RQ1</td><td>How often do SLMs vs LLMs generate vulnerable code?</td><td>Share of prompts with ≥1 targeted HIGH/MEDIUM finding, per model</td></tr> <tr><td>RQ2</td><td>Which vulnerability classes (CWEs) dominate?</td><td>Distribution of deduplicated findings per CWE</td></tr> <tr><td>RQ3</td><td>Does programming language change the vulnerability rate?</td><td>Per-language targeted HIGH/MEDIUM rate, SLM vs LLM</td></tr> <tr><td>RQ4</td><td>Do SLMs produce more vulnerable code than LLMs? (descriptive)</td><td>Mean vulnerable-prompt rate per group</td></tr> <tr><td>RQ5</td><td>Does code size (LOC) predict finding count?</td><td>Findings per 100 LOC, per language</td></tr> </tbody> </table> <p>Framing constraints, stated up front:</p> <ul> <li>
+RQ4 is <strong>descriptive only</strong>. Nine models is far too small for significance testing, and the
+          SLM-vs-LLM comparison is confounded by provider alignment and unknown browser
+          sampling temperature. We report means and effects, not p-values.
+</li> <li>
+Repetitions (3 per prompt) measure <strong>within-model reliability</strong>, not independent samples.
+</li> </ul> <h2 id="method">3. Method</h2> <h3>3.1 Models</h3> <p>
+Nine models. Three local SLMs run via Ollama on CPU: Qwen2.5-Coder 1.5B, Qwen2.5-Coder 7B, and
+        Llama 3.1 8B (a general-purpose control). Six cloud LLMs via browser chat: Claude Sonnet 4.5,
+        DeepSeek V4 Pro, GPT-5.6 Luna, Gemini 3.5 Flash-Lite, Qwen3-Coder Next, and Grok 4.7. The Qwen
+        family forms a deliberate size ladder: 1.5B → 7B → Qwen3-Coder Next.
+</p> <h3>3.2 Prompts: neutral, functional, identical</h3> <p>
+Six projects, each a realistic task a developer would ask an assistant for. Five run in Python,
+        Go, and JavaScript; the sixth (a Fibonacci control) is Python-only, giving 16 prompts. Every
+        prompt requests <strong>functionality only</strong>. It never mentions security, sanitization, hashing
+        strength, or injection. Asking a model to "write vulnerable code" tests instruction-following,
+        not what it emits when a real developer asks for a feature. Prompts are identical across models;
+        only the language and framework change. Zero-shot, temperature 0.2 for SLMs, three repetitions per
+        prompt in a fresh chat or fresh process each time.
+</p> <p>
+The six tasks were not chosen arbitrarily. We began with the MITRE CWE Top 25 and selected
+        the subset that (a) arises naturally in code a developer would actually request, (b) is
+        detectable by static analysis without execution, and (c) spans the three target languages.
+        This gave us the five security-sensitive projects: an authentication API (CWE-522, hard-coded
+        credentials), a file service (CWE-22 path traversal, CWE-73), a database search endpoint
+        (CWE-89 SQL injection), a health-monitor webhook (CWE-78 command injection, CWE-502
+        deserialization), and a session handler (CWE-319 cleartext, CWE-79 XSS). The Fibonacci
+        control (CWE-free by design) gives a baseline: a model that produces zero findings on a
+        trivial prompt is at least not systematically broken. Prompts were reviewed internally before
+        data collection to confirm that no security-related wording had crept in; the final versions
+        are what appear in the appendix of the full dataset.
+</p> <h3>3.3 The pipeline</h3> <ol> <li> <strong>Functional gate.</strong> Every file must parse or compile (<code>ast.parse</code>, <code>gofmt -e</code>, <code>node --check</code>).
+          Failures are excluded: a truncated file is neither secure nor vulnerable; it is <em>invalid</em>.
+</li> <li> <strong>Static analysis.</strong> Bandit (Python), Gosec (Go), Semgrep (all three), pinned versions.
+</li> <li> <strong>Cross-tool deduplication.</strong> The same CWE on the same line is often flagged by two tools; we keep
+          the highest severity and record all contributing tools, so Python and Go are not biased upward
+          versus single-tool JavaScript.
+</li> <li> <strong>Three measurement levels.</strong> All findings, then targeted (only CWEs the project was designed
+          to provoke), then targeted HIGH/MEDIUM (the ranking metric). Generic noise
+          (<code>debug=True</code>, subprocess import, no-timeout requests) is filtered out of "targeted".
+</li> </ol> <h2 id="results">4. Results</h2> <p>
+The headline metric is <strong>secure rate</strong>: the share of a model's 16 prompts that produced <em>no</em>
+targeted HIGH or MEDIUM finding in any of three repetitions. Higher is better.
+</p> <figure> <img src="/securecode-arena/figures/fig1_secure_rate.png" alt="Figure 1. Secure code generation rate by model"> <figcaption>Figure 1. Secure code generation rate by model</figcaption> </figure> <p>
+Four cloud LLMs (Claude Sonnet 4.5, GPT-5.6 Luna, Grok 4.7, and Qwen3-Coder Next) tie at the
+        top with 14 of 16 prompts secure (87.5%). All three SLMs land at 11 of 16 (68.8%), a full three
+        prompts behind. DeepSeek V4 Pro (12/16) and Gemini 3.5 Flash-Lite (13/16) sit in between.
+</p> <figure> <img src="/securecode-arena/figures/fig2_slm_vs_llm.png" alt="Figure 2. SLM vs LLM vulnerable-code rate"> <figcaption>Figure 2. SLM vs LLM vulnerable-code rate</figcaption> </figure> <p>
+Grouping by type, the gap is clean: SLMs average a 31.2% vulnerable-prompt rate against 15.6% for
+        LLMs, exactly 2×. We report this descriptively; it is a trend over 9 models, not a population
+        claim, and the LLM edge is plausibly as much about alignment and safety training as raw capability.
+</p> <h3>4.1 Which vulnerabilities appear most (RQ2)</h3> <figure> <img src="/securecode-arena/figures/fig3_cwe_heatmap.png" alt="Figure 3. Top 10 CWEs by finding count"> <figcaption>Figure 3. Top 10 CWEs by finding count</figcaption> </figure> <p>
+The most frequent classes are <strong>CWE-319</strong> (cleartext transmission: serving HTTP without TLS,
+        96 findings), <strong>CWE-489/94</strong> (debug code / code injection: Flask <code>debug=True</code>, 82 each),
+<strong>CWE-502</strong> (insecure deserialization: <code>pickle</code>/<code>eval</code>, 72), and <strong>CWE-78</strong> (command injection,
+        51). CWE-319 and the debug-code classes are near-universal across both SLMs and LLMs. They are
+        the defaults a model reaches for when writing an API quickly. The classes that
+        actually <em>discriminate</em> (SQL injection, CWE-89; command injection, CWE-78; insecure
+        deserialization) are where the SLMs lose ground.
+</p> <h3>4.2 Language (RQ3)</h3> <figure> <img src="/securecode-arena/figures/fig4_per_language.png" alt="Figure 4. Vulnerable-code rate by language"> <figcaption>Figure 4. Vulnerable-code rate by language</figcaption> </figure> <p>
+Python is the worst language for both groups (SLMs 44.4%, LLMs 19.4% of prompts vulnerable),
+        expected, since the deserialization and command-injection prompts are Python-native. Go is the
+        safest (SLMs 13.3%, LLMs 0.0%). JavaScript sits between. This mirrors Hasan et al.'s finding
+        that SLMs are weakest on Go: weak proficiency does not translate to <em>more</em> vulnerabilities here;
+        the language's own constraints (typed, no <code>eval</code>, no shell-by-default) are doing protective work.
+</p> <h3>4.3 Severity (RQ2)</h3> <figure> <img src="/securecode-arena/figures/fig5_severity.png" alt="Figure 5. Severity distribution per model"> <figcaption>Figure 5. Severity distribution per model</figcaption> </figure> <p>
+Every model emits a long tail of LOW findings; the discrimination is in HIGH and MEDIUM. SLMs
+        produce HIGH findings at a rate comparable to or above several LLMs. Qwen2.5-Coder 1.5B records
+        13 HIGH, versus 0 for GPT-5.6 Luna and Grok 4.7, which almost never produce a HIGH-severity
+        finding at all.
+</p> <h2 id="discussion">5. Discussion</h2> <p>Three takeaways.</p> <p> <strong>1. Size tracks security, but not the way one might assume.</strong> The gap is not that large models
+        are safer because they are more capable. It is that the <em>code-specialized and alignment-heavy</em>
+models (Claude, GPT, Grok, Qwen3-Coder) consistently refuse or avoid the dangerous construct,
+        while the small local models default to it. The smallest model in the set, Qwen2.5-Coder 1.5B,
+        is no worse than Llama 3.1 8B. Size within the SLM group does not buy security.
+</p> <p> <strong>2. The dangerous constructs are habits, not bugs.</strong> CWE-319 (no TLS) and CWE-489/94
+        (<code>debug=True</code>) dominate because they are the <em>default</em> shape of a quickly written API. A model
+        does not decide to be insecure here; it reaches for the shortest path. This is exactly what
+        static analysis catches well, and exactly what a reviewer skimming for "does it work" misses.
+</p> <p> <strong>3. The valid/invalid distinction is itself a finding.</strong> Before we re-ran the local models, a
+        large fraction of their output did not even parse. Earlier runs showed 41.7% valid for the 1.5B
+        model. After correction, validity is near-universal. The earlier state is the honest
+        picture of a small local model under real use: sometimes it does not produce runnable code at
+        all. That failure mode is separate from, and arguably more important than, writing vulnerable
+        code.
+</p> <h2 id="limitations">6. Limitations</h2> <ul> <li> <strong>Static analysis only.</strong> We do not execute generated code, so behavioral
+          vulnerabilities that static tools cannot see (missing authentication, CWE-287; missing
+          authorization, CWE-862; session fixation, CWE-384) are <strong>not</strong> measured here. The secure
+          rate is a lower bound on how insecure the code actually is.
+</li> <li> <strong>Small N.</strong> Nine models. No causal or statistical claims. The SLM-vs-LLM gap is descriptive and
+          confounded by alignment training and unknown browser sampling temperature.
+</li> <li> <strong>Manual prompt delivery.</strong> Browser models were prompted by copy-paste, not an API, so exact
+          sampling settings are uncontrolled (recorded as "unknown").
+</li> <li> <strong>Static analyzers have false positives and negatives.</strong> The three-level filter mitigates
+          false positives; Semgrep, Bandit and Gosec overlap mitigates false negatives. Neither is a proof
+          of ground truth.
+</li> <li> <strong>Three repetitions at low temperature.</strong> More repetitions could move a borderline prompt across the
+          line. We report repetition-level agreement for this reason.
+</li> <li> <strong>Language selection.</strong> Python, Go and JavaScript cover a useful spectrum but not the full language space.
+</li> </ul> <h2 id="references">References</h2> <ol> <li>
+Hasan, M. M., et al. (2026). Evaluation of small language models on code generation benchmarks
+          (HumanEval, MBPP, Mercury, HumanEvalPack, CodeXGLUE). Cited for the explicit statement that
+          those metrics do not account for the security of generated code.
+</li> <li>
+Wu, T., Ge, C., Chen, P., Zhang, F., Wu, Y., Xie, Y., Li, J., Peng, C., Zhang, K., Huang, D.,
+          Du, M., Huang, Y., Zhang, J., Zhuo, T. Y., and Ng, S.-K. (2026).
+          Last Secure Code Benchmark: Is the Code You Vibe Secure?
+          arXiv:<a href="https://arxiv.org/abs/2610.14766">2610.14766</a>.
+</li> <li>
+MITRE. Common Weakness Enumeration.
+<a href="https://cwe.mitre.org/">https://cwe.mitre.org/</a>.
+</li> </ol> </article> </div>  </main> <footer class="site-footer"> <div class="wrap footer-inner"> <div>
+SecureCode Arena. An independent academic study at INPT.
+</div> <div>
+Mohamed Anaddam and Maryam Iblihi, supervised by Assoc. Prof. Meryeme Ayache.
+</div> </div> </footer> </body></html>
