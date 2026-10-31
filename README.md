@@ -6,7 +6,7 @@
 
 <p align="center"><strong>Which AI models write secure code?</strong></p>
 
-SecureCode Arena is a defensive benchmark of security in AI-generated code. It measures how often models introduce targeted HIGH or MEDIUM severity vulnerabilities when asked to implement ordinary functional requirements—with no security guidance in the prompt.
+SecureCode Arena is a defensive benchmark of security in AI-generated code. It measures how often models introduce targeted HIGH or MEDIUM severity vulnerabilities when asked to implement ordinary functional requirements with no security guidance in the prompt.
 
 ## At a glance
 
