@@ -8,6 +8,8 @@
 
 SecureCode Arena is a defensive benchmark of security in AI-generated code. It measures how often models introduce targeted HIGH or MEDIUM severity vulnerabilities when asked to implement ordinary functional requirements with no security guidance in the prompt.
 
+Website: https://plur1bu5.github.io/securecode-arena/
+
 ## At a glance
 
 - 9 models: 3 locally hosted small language models (SLMs) and 6 cloud LLMs
